@@ -4,6 +4,7 @@ from models import init_db, get_db_connection
 import jwt
 from datetime import datetime, timedelta
 from config import SECRET_KEY
+from auth import token_required
 app=Flask(__name__)
 # Routes
 # home route
@@ -21,7 +22,7 @@ def sign_up():
     # if user is not None:
     if user:
         conn.close()
-        return jsonify({"error":"Username and password already exist"}),409
+        return jsonify({"error":"Username or email already exist"}),409
     hash=generate_password_hash(data["password"])
     conn.execute("INSERT INTO users (username, email, password_hash) VALUES(?,?,?)",(data["username"],data["email"],hash,))
     conn.commit()
@@ -53,6 +54,29 @@ def login():
     conn.close()
 # return response
     return jsonify({"token":token}),200
+# Profile route
+@app.route("/profile",methods=["GET"])
+@token_required
+def profile(payload):
+    user_id=payload["user_id"]
+    conn=get_db_connection()
+    response=conn.execute("SELECT username, email FROM users WHERE id=?",(user_id,)).fetchone()
+    if response is None:
+        conn.close()
+        return jsonify({"error":"User not found"}),404
+    conn.close()
+    return jsonify({"username":response["username"],"email":response["email"]})
+# User route - get all user
+@app.route("/users",methods=["GET"])
+def get_all_users():
+    conn=get_db_connection()
+    users=conn.execute("SELECT username, email FROM users").fetchall()
+    if not users:
+        conn.close()
+        return jsonify({"error":"no user found"}),404
+    users_list=[{"username":user["username"],"email":user["email"]} for user in users]
+    conn.close()
+    return jsonify(users_list)
 # Entry point
 if __name__=="__main__":
     init_db()
